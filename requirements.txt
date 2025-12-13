@@ -2,5 +2,4 @@ requests
 altair
 pandas
 datetime
-matplotlib
 
