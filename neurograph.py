@@ -1,10 +1,20 @@
 import streamlit as st
 import nltk
 import pandas as pd
+import os
 
-# --- Ensure tokenizer ---
-nltk.download("punkt", quiet=True)
-nltk.download("averaged_perceptron_tagger", quiet=True)
+# --- Ensure NLTK data is available ---
+nltk_data_dir = os.path.join(os.path.expanduser("~"), "nltk_data")
+nltk.data.path.append(nltk_data_dir)
+
+for resource, download_name in [
+    ("tokenizers/punkt", "punkt"),
+    ("taggers/averaged_perceptron_tagger", "averaged_perceptron_tagger")
+]:
+    try:
+        nltk.data.find(resource)
+    except LookupError:
+        nltk.download(download_name, download_dir=nltk_data_dir)
 
 # --- POS → Feature Map ---
 WORD_CLASS_MAP = {
@@ -44,7 +54,7 @@ def map_pos(tag):
 # --- Streamlit UI ---
 st.title("🧠 Token Semantic Classifier")
 
-text = st.text_input("Enter a sentence")
+text = st.text_input("Enter a sentence", "The quick brown fox jumps over 3 lazy dogs")
 
 if text:
     tokens = nltk.word_tokenize(text)
