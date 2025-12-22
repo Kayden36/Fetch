@@ -1,13 +1,12 @@
 import streamlit as st
-import spacy
-import numpy as np
+import nltk
 import pandas as pd
 
-# --- NLP setup (NO external models) ---
-nlp = spacy.blank("en")
-nlp.add_pipe("sentencizer")
+# --- Ensure tokenizer ---
+nltk.download("punkt", quiet=True)
+nltk.download("averaged_perceptron_tagger", quiet=True)
 
-# --- Semantic feature rules (cheap "embeddings") ---
+# --- POS → Feature Map ---
 WORD_CLASS_MAP = {
     "NOUN":  [0.85, 0.10, 0.40, 0.30, 0.15, 0.0, 0.0],
     "VERB":  [0.10, 0.85, 0.30, 0.20, 0.10, 0.0, 0.2],
@@ -24,44 +23,43 @@ FEATURES = [
     "Photonness", "Leptonness", "Charge", "Operator"
 ]
 
-def token_to_vec(token):
-    pos = token.pos_ if token.pos_ else "OTHER"
-    return np.array(WORD_CLASS_MAP.get(pos, WORD_CLASS_MAP["OTHER"]))
-
-def sentence_gist(sentence):
-    vectors = [token_to_vec(t) for t in sentence if t.is_alpha]
-    if not vectors:
-        return np.zeros(len(FEATURES))
-    return np.mean(vectors, axis=0)
-
-def paragraph_gist(sent_gists):
-    if not sent_gists:
-        return np.zeros(len(FEATURES))
-    weights = np.array([np.linalg.norm(g) for g in sent_gists])
-    weights = weights / weights.sum()
-    return np.sum([w * g for w, g in zip(weights, sent_gists)], axis=0)
+# --- NLTK tag → coarse class ---
+def map_pos(tag):
+    if tag.startswith("NN"):
+        return "NOUN"
+    if tag.startswith("VB"):
+        return "VERB"
+    if tag.startswith("JJ"):
+        return "ADJ"
+    if tag.startswith("RB"):
+        return "ADV"
+    if tag in ("IN",):
+        return "ADP"
+    if tag in ("PRP", "PRP$"):
+        return "PRON"
+    if tag == "CD":
+        return "NUM"
+    return "OTHER"
 
 # --- Streamlit UI ---
-st.title("🧠 Quantum Disambiguation Engine")
-text = st.text_area("Input text", height=150)
+st.title("🧠 Token Semantic Classifier")
+
+text = st.text_input("Enter a sentence")
 
 if text:
-    doc = nlp(text)
+    tokens = nltk.word_tokenize(text)
+    tagged = nltk.pos_tag(tokens)
 
-    sentence_rows = []
-    sentence_gists = []
+    rows = []
+    for word, tag in tagged:
+        cls = map_pos(tag)
+        features = WORD_CLASS_MAP[cls]
+        rows.append([word, tag, cls] + features)
 
-    for sent in doc.sents:
-        gist = sentence_gist(sent)
-        sentence_gists.append(gist)
-        sentence_rows.append([sent.text] + list(gist))
+    df = pd.DataFrame(
+        rows,
+        columns=["Token", "NLTK_POS", "Class"] + FEATURES
+    )
 
-    para_gist = paragraph_gist(sentence_gists)
-
-    st.subheader("Sentence Gist Vectors")
-    df_sent = pd.DataFrame(sentence_rows, columns=["Sentence"] + FEATURES)
-    st.dataframe(df_sent)
-
-    st.subheader("Paragraph Gist Vector")
-    df_para = pd.DataFrame([para_gist], columns=FEATURES)
-    st.dataframe(df_para)
+    st.subheader("Token Classification")
+    st.dataframe(df)
