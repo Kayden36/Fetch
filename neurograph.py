@@ -1,67 +1,122 @@
 import streamlit as st
-import spacy
+import subprocess
+import sys
 import numpy as np
 
-# --- Load English tokenizer ---
-nlp = spacy.load("en_core_web_sm")
+# ---------- Ensure spaCy + model ----------
+def load_spacy():
+    try:
+        import spacy
+        return spacy.load("en_core_web_sm")
+    except:
+        subprocess.run([sys.executable, "-m", "pip", "install", "spacy"])
+        subprocess.run([sys.executable, "-m", "spacy", "download", "en_core_web_sm"])
+        import spacy
+        return spacy.load("en_core_web_sm")
 
-# --- Semantic table mapping ---
-def token_to_particle(token_text, pos):
-    feat = np.zeros(7)  # [boson, fermion, gluon, photon, lepton, charge, operator]
-    if pos == "NOUN":
-        feat[0] = 0.85  # bosonness
-        feat[2] = 0.4   # gluonness
-    elif pos == "VERB":
-        feat[1] = 0.8   # fermionness
-        feat[3] = 0.3   # photonness
-    elif pos == "ADJ":
-        feat[3] = 0.5
-    elif pos == "ADV":
-        feat[4] = 0.3
-    return feat
+nlp = load_spacy()
 
-# --- Disambiguation ---
-def disambiguate(tokens_feats):
-    feats = tokens_feats.copy()
-    for i in range(len(feats)):
-        if feats[i][1] > 0:  # fermionness
-            if i > 0:
-                feats[i-1][0] += 0.1
-            if i < len(feats)-1:
-                feats[i+1][0] += 0.1
-    np.clip(feats, 0, 1, out=feats)
-    return feats
+# ---------- Quantum Semantic Mapping ----------
+def semantic_features(token):
+    """Map lexical class → particle features"""
+    features = {
+        "bosonness": 0.0,
+        "fermionness": 0.0,
+        "gluonness": 0.0,
+        "photonness": 0.0,
+        "leptonness": 0.0,
+        "charge": 0.0,
+        "operator": 0.0
+    }
 
-# --- Coagulate token features into gist.vec ---
-def coagulate(feats):
-    return np.sum(feats, axis=0)
+    if token.pos_ in ["NOUN", "PROPN"]:
+        features["bosonness"] = 0.85
+        features["gluonness"] = 0.40
 
-# --- Streamlit UI ---
-st.title("Quantum-inspired Gist.vec Parser")
+    if token.pos_ == "VERB":
+        features["fermionness"] = 0.75
+        features["operator"] = 0.60
 
-paragraph = st.text_area("Enter Paragraph:", 
-                         "My client is selling this machine Min Pajero GD1 PRICE 55,000. CONTACT me on 0974833183.")
+    if token.pos_ in ["ADJ", "ADV"]:
+        features["photonness"] = 0.60
 
-if st.button("Parse Gist.vec"):
-    doc = nlp(paragraph)
-    tokens = [t.text for t in doc]
-    token_feats = np.array([token_to_particle(t.text, t.pos_) for t in doc])
-    token_feats = disambiguate(token_feats)
-    
-    # Token-level particle features
-    st.subheader("Token-level Particle Features")
-    for t, f in zip(tokens, token_feats):
-        st.write(f"{t}: {np.round(f,2)}")
-    
-    # Coagulate to paragraph gist.vec
-    gist_vec = coagulate(token_feats)
-    st.subheader("Paragraph Gist.vec")
-    st.write(np.round(gist_vec,2))
-    
-    # Token contributions to gist.vec
-    st.subheader("Token Contribution to Gist.vec Features")
-    feature_names = ["Bosonness","Fermionness","Gluonness","Photonness","Leptonness","Charge","Operator"]
-    contributions = token_feats / (gist_vec + 1e-6)  # avoid divide by zero
-    for i, fname in enumerate(feature_names):
-        token_vals = [(t, round(contributions[j][i],2)) for j,t in enumerate(tokens)]
-        st.write(f"{fname}: {token_vals}")
+    if token.pos_ in ["ADP", "SCONJ", "CCONJ"]:
+        features["gluonness"] = 0.80
+
+    if token.pos_ in ["PRON", "DET"]:
+        features["leptonness"] = 0.60
+
+    if token.like_num:
+        features["photonness"] = 0.70
+
+    return np.array(list(features.values()))
+
+FEATURE_NAMES = [
+    "Bosonness",
+    "Fermionness",
+    "Gluonness",
+    "Photonness",
+    "Leptonness",
+    "Charge",
+    "Operator"
+]
+
+# ---------- Gist Vector Construction ----------
+def gist_vector(text):
+    doc = nlp(text)
+    token_vectors = []
+    tokens_used = []
+
+    for token in doc:
+        if token.is_alpha or token.like_num:
+            vec = semantic_features(token)
+            token_vectors.append(vec)
+            tokens_used.append(token.text)
+
+    if not token_vectors:
+        return None, []
+
+    # Quantum-style coagulation (sum + mild ReLU)
+    mat = np.vstack(token_vectors)
+    gist = np.maximum(0, mat.sum(axis=0))
+
+    return gist, tokens_used
+
+# ---------- Streamlit UI ----------
+st.set_page_config(page_title="Quantum Gist Engine", layout="wide")
+
+st.title("🧠 Quantum Disambiguation Engine")
+st.caption("Low-bloat semantic gist extraction · No embeddings · No attention")
+
+text = st.text_area(
+    "Enter text (scrambled or normal):",
+    height=150,
+    value="My client is selling this machine Min Pajero GD1 PRICE 55,000."
+)
+
+if st.button("Generate Gist.vec"):
+    gist, tokens = gist_vector(text)
+
+    if gist is None:
+        st.warning("No valid tokens detected.")
+    else:
+        st.subheader("📌 Tokens Used")
+        st.write(tokens)
+
+        st.subheader("⚛️ Gist.vec (Low-Bloat Logits)")
+        for name, value in zip(FEATURE_NAMES, gist):
+            st.metric(name, round(float(value), 3))
+
+        st.subheader("🧩 Interpretation")
+        st.write("""
+        • **Bosonness** → Core entities / anchors  
+        • **Fermionness** → Actions & intent  
+        • **Gluonness** → Structural coherence  
+        • **Photonness** → Descriptors & modifiers  
+        • **Leptonness** → Minor context  
+        • **Charge** → Sentiment / polarity  
+        • **Operator** → Command / instruction strength  
+        """)
+
+st.markdown("---")
+st.caption("Prototype inspired by quantum-field semantics · 2023 model")
