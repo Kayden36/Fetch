@@ -1,63 +1,27 @@
 import streamlit as st
-import nltk
 import pandas as pd
-import re
+import pickle
 
-# --- POS → Feature Map ---
-WORD_CLASS_MAP = {
-    "NOUN":  [0.85, 0.10, 0.40, 0.30, 0.15, 0.0, 0.0],
-    "VERB":  [0.10, 0.85, 0.30, 0.20, 0.10, 0.0, 0.2],
-    "ADJ":   [0.30, 0.20, 0.10, 0.70, 0.10, 0.0, 0.0],
-    "ADV":   [0.10, 0.20, 0.10, 0.60, 0.20, 0.0, 0.0],
-    "ADP":   [0.05, 0.05, 0.80, 0.05, 0.05, 0.0, 0.0],
-    "PRON":  [0.05, 0.10, 0.05, 0.10, 0.70, 0.0, 0.0],
-    "NUM":   [0.20, 0.05, 0.05, 0.60, 0.10, 0.2, 0.0],
-    "OTHER": [0.10, 0.10, 0.10, 0.10, 0.10, 0.0, 0.0],
-}
+st.title("Local Language Vocabulary → Pickle Generator (Raw POS)")
 
-FEATURES = [
-    "Bosonness", "Fermionness", "Gluonness",
-    "Photonness", "Leptonness", "Charge", "Operator"
-]
+# Upload Excel file
+uploaded_file = st.file_uploader("Upload your Tonga vocab Excel file", type=["xlsx", "xls"])
+if uploaded_file is not None:
+    df = pd.read_excel(uploaded_file)
+    st.write("Preview of Excel data:")
+    st.dataframe(df.head())
 
-# --- NLTK tag → coarse class ---
-def map_pos(tag):
-    if tag.startswith("NN"):
-        return "NOUN"
-    if tag.startswith("VB"):
-        return "VERB"
-    if tag.startswith("JJ"):
-        return "ADJ"
-    if tag.startswith("RB"):
-        return "ADV"
-    if tag in ("IN",):
-        return "ADP"
-    if tag in ("PRP", "PRP$"):
-        return "PRON"
-    if tag == "CD":
-        return "NUM"
-    return "OTHER"
+    # Convert to dictionary
+    tonga_vocab = df.to_dict(orient='index')
 
-# --- Streamlit UI ---
-st.title("🧠 Token Semantic Classifier")
-
-text = st.text_input("Enter a sentence", "The quick brown fox jumps over 3 lazy dogs")
-
-if text:
-    # Use regex tokenizer instead of NLTK word_tokenize
-    tokens = re.findall(r'\w+|[^\w\s]', text)
-    tagged = nltk.pos_tag(tokens)
-
-    rows = []
-    for word, tag in tagged:
-        cls = map_pos(tag)
-        features = WORD_CLASS_MAP[cls]
-        rows.append([word, tag, cls] + features)
-
-    df = pd.DataFrame(
-        rows,
-        columns=["Token", "NLTK_POS", "Class"] + FEATURES
-    )
-
-    st.subheader("Token Classification")
-    st.dataframe(df)
+    # Button to save pickle
+    if st.button("Generate Pickle"):
+        pickle_file_name = "tonga_vocab.pickle"
+        with open(pickle_file_name, "wb") as f:
+            pickle.dump(tonga_vocab, f)
+        st.success(f"Pickle file saved as {pickle_file_name}")
+        st.download_button(
+            "Download Pickle",
+            data=open(pickle_file_name, "rb").read(),
+            file_name=pickle_file_name
+        )
