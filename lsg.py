@@ -153,8 +153,8 @@ with tab1:
     # =============================
     # EXCEL UPLOAD
     # =============================
-    st.subheader("Upload Excel (4 columns, no headers)")
-    st.caption("Columns: Tonga | POS | SQF(optional) | Comment")
+    st.subheader("Upload Excel (3-4 columns, no headers)")
+    st.caption("Columns: Tonga | POS | Comment (optional SQF) | Comment")
 
     uploaded = st.file_uploader(
         "Upload .xlsx file",
@@ -164,12 +164,16 @@ with tab1:
     if uploaded:
         df = pd.read_excel(uploaded, header=None)
 
-        # Ensure 4 columns
-        while df.shape[1] < 4:
-            df[df.shape[1]] = ""
-
-        df = df.iloc[:, :4]
-        df.columns = ["tonga_word", "pos", "sqf_token", "comment"]
+        # Handle 3 or 4 columns
+        if df.shape[1] == 3:
+            df.columns = ["tonga_word", "pos", "comment"]
+            df["sqf_token"] = ""
+        elif df.shape[1] >= 4:
+            df = df.iloc[:, :4]
+            df.columns = ["tonga_word", "pos", "sqf_token", "comment"]
+        else:
+            st.error("Excel must have at least 3 columns")
+            st.stop()
 
         # Auto SQF assignment
         df["sqf_token"] = df.apply(
@@ -217,9 +221,34 @@ with tab2:
 with tab3:
     st.subheader("Export")
 
+    # Export Pickle
     if st.button("Export Pickle"):
         export_pickle()
         st.success(f"Exported → {PICKLE_PATH}")
+        with open(PICKLE_PATH, "rb") as f:
+            st.download_button(
+                label="Download Pickle",
+                data=f,
+                file_name=PICKLE_PATH,
+                mime="application/octet-stream"
+            )
+
+    # Export JSON
+    if st.button("Export JSON"):
+        df = fetch_all()
+        json_path = PICKLE_PATH.replace(".pkl", ".json")
+        records = df.to_dict(orient="records")
+        with open(json_path, "w", encoding="utf-8") as f:
+            import json
+            json.dump(records, f, ensure_ascii=False, indent=2)
+        st.success(f"Exported → {json_path}")
+        with open(json_path, "rb") as f:
+            st.download_button(
+                label="Download JSON",
+                data=f,
+                file_name=json_path,
+                mime="application/json"
+            )
 
     st.caption(
         "Pickle contains list[dict]: "
