@@ -1,104 +1,227 @@
 import streamlit as st
-import requests
-import json
-import sqlite3
 import pandas as pd
-import altair as alt
-from datetime import datetime
+import sqlite3
+import pickle
+from pathlib import Path
 
-st.set_page_config(page_title="LSG Weather Logger", layout="wide")
-st.title("🌍 LSG Weather Logger & Graph")
+# =============================
+# CONFIG
+# =============================
+DB_PATH = "tonga_sqf.db"
+PICKLE_PATH = "tonga_sqf.pkl"
 
-# --- DATABASE SETUP ---
-conn = sqlite3.connect("lsg_weather.db", check_same_thread=False)
-c = conn.cursor()
-c.execute("""
-CREATE TABLE IF NOT EXISTS lsg_metrics (
-    id INTEGER PRIMARY KEY,
-    timestamp TEXT,
-    temperature REAL,
-    humidity REAL,
-    windspeed REAL
+st.set_page_config(
+    page_title="Tonga → SQF Tagger",
+    layout="wide"
 )
-""")
-conn.commit()
 
-# --- SIDEBAR INPUTS ---
-st.sidebar.header("Open-Meteo LSG Request")
-latitude = st.sidebar.number_input("Latitude", value=-15.3875)
-longitude = st.sidebar.number_input("Longitude", value=28.3228)
-current_weather = st.sidebar.checkbox("Current Weather", value=True)
-timezone = st.sidebar.text_input("Timezone", value="Africa/Lusaka")
-send_button = st.sidebar.button("Fetch & Log LSG Metrics 🚀")
-
-# --- BUILD QUERY PARAMS ---
-params = {
-    "latitude": latitude,
-    "longitude": longitude,
-    "current_weather": current_weather,
-    "hourly": ["temperature_2m", "relative_humidity_2m", "windspeed_10m"],
-    "timezone": timezone
+# =============================
+# POS → SQF MAP
+# =============================
+POS_TO_SQF = {
+    "Noun": "Boson",
+    "Verb": "Fermion",
+    "Pronoun": "Boson.Proxy",
+    "Adjective": "Scalar.Boson",
+    "Adverb": "Scalar.Fermion",
+    "Preposition": "Gauge",
+    "Conjunction": "Operator",
+    "Interjection": "Scalar.Impulse",
+    "Number": "Scalar.Quantizer",
+    "Demonstrative": "Anchor.Gauge",
+    "Question": "Operator.Probe"
 }
 
-base_url = "https://api.open-meteo.com/v1/forecast"
+def pos_to_sqf(pos):
+    if not pos:
+        return ""
+    pos_clean = str(pos).strip().title()
+    return POS_TO_SQF.get(pos_clean, "Unknown")
 
-# --- SEND REQUEST ---
-if send_button:
-    try:
-        response = requests.get(base_url, params=params)
-        res_json = response.json()
-        st.json(res_json)
+# =============================
+# DATABASE
+# =============================
+def get_conn():
+    return sqlite3.connect(DB_PATH, check_same_thread=False)
 
-        # --- LOG CURRENT WEATHER TO DB ---
-        if "current_weather" in res_json:
-            cw = res_json["current_weather"]
-            c.execute("""
-                INSERT INTO lsg_metrics (timestamp, temperature, humidity, windspeed)
-                VALUES (?, ?, ?, ?)
-            """, (
-                cw.get("time"),
-                cw.get("temperature"),
-                None,  # hourly humidity will be logged below
-                cw.get("windspeed")
-            ))
-            conn.commit()
+def init_db():
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS vocab (
+            tonga_word TEXT PRIMARY KEY,
+            pos TEXT,
+            sqf_token TEXT,
+            comment TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
 
-        # --- LOG HOURLY METRICS ---
-        if "hourly" in res_json:
-            hourly = res_json["hourly"]
-            times = hourly["time"]
-            temps = hourly.get("temperature_2m", [])
-            hums = hourly.get("relative_humidity_2m", [])
-            winds = hourly.get("windspeed_10m", [])
-            for t, temp, hum, wind in zip(times, temps, hums, winds):
-                c.execute("""
-                    INSERT INTO lsg_metrics (timestamp, temperature, humidity, windspeed)
-                    VALUES (?, ?, ?, ?)
-                """, (t, temp, hum, wind))
-            conn.commit()
+init_db()
 
-        st.success("Metrics logged successfully!")
+# =============================
+# DB HELPERS
+# =============================
+def insert_or_update(row):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT OR REPLACE INTO vocab
+        (tonga_word, pos, sqf_token, comment)
+        VALUES (?, ?, ?, ?)
+    """, (
+        row["tonga_word"],
+        row["pos"],
+        row["sqf_token"],
+        row["comment"]
+    ))
+    conn.commit()
+    conn.close()
 
-    except Exception as e:
-        st.error(f"Failed to fetch LSG data: {e}")
+def fetch_all():
+    conn = get_conn()
+    df = pd.read_sql(
+        "SELECT * FROM vocab ORDER BY tonga_word",
+        conn
+    )
+    conn.close()
+    return df
 
-# --- GRAPH ---
-st.subheader("LSG Metrics Graph Over Time")
-df = pd.read_sql_query("SELECT * FROM lsg_metrics ORDER BY timestamp", conn)
-if not df.empty:
-    df['timestamp'] = pd.to_datetime(df['timestamp'])
-    
-    # Melt for Altair
-    df_melted = df.melt('timestamp', value_vars=['temperature', 'humidity', 'windspeed'],
-                        var_name='Metric', value_name='Value')
-    
-    chart = alt.Chart(df_melted).mark_line(point=True).encode(
-        x='timestamp:T',
-        y='Value:Q',
-        color='Metric:N',
-        tooltip=['timestamp', 'Metric', 'Value']
-    ).interactive()
+def fetch_word(query):
+    conn = get_conn()
+    df = pd.read_sql(
+        "SELECT * FROM vocab WHERE tonga_word LIKE ?",
+        conn,
+        params=(f"%{query}%",)
+    )
+    conn.close()
+    return df
 
-    st.altair_chart(chart, use_container_width=True)
-else:
-    st.write("No metrics logged yet. Click 'Fetch & Log LSG Metrics 🚀' to start.")
+def export_pickle():
+    df = fetch_all()
+    records = df.to_dict(orient="records")
+    with open(PICKLE_PATH, "wb") as f:
+        pickle.dump(records, f)
+
+# =============================
+# UI
+# =============================
+st.title("🧠 Tonga → SQF POS Tagger")
+
+tab1, tab2, tab3 = st.tabs([
+    "📥 Ingest / Edit",
+    "🔍 Search",
+    "📦 Export"
+])
+
+# =============================
+# TAB 1 — INGEST / EDIT
+# =============================
+with tab1:
+    st.subheader("Manual Entry")
+
+    c1, c2, c3, c4 = st.columns(4)
+
+    with c1:
+        tonga_word = st.text_input("Tonga Word")
+
+    with c2:
+        pos = st.text_input("POS (e.g. Noun, Verb)")
+
+    with c3:
+        sqf_token = st.text_input("SQF Token (optional)")
+
+    with c4:
+        comment = st.text_input("Comment / English gloss")
+
+    if st.button("Save Entry"):
+        if tonga_word and pos:
+            final_sqf = sqf_token.strip() or pos_to_sqf(pos)
+            insert_or_update({
+                "tonga_word": tonga_word.strip(),
+                "pos": pos.strip(),
+                "sqf_token": final_sqf,
+                "comment": comment.strip()
+            })
+            st.success("Saved.")
+        else:
+            st.error("Tonga word and POS are required.")
+
+    st.divider()
+
+    # =============================
+    # EXCEL UPLOAD
+    # =============================
+    st.subheader("Upload Excel (4 columns, no headers)")
+    st.caption("Columns: Tonga | POS | SQF(optional) | Comment")
+
+    uploaded = st.file_uploader(
+        "Upload .xlsx file",
+        type=["xlsx"]
+    )
+
+    if uploaded:
+        df = pd.read_excel(uploaded, header=None)
+
+        # Ensure 4 columns
+        while df.shape[1] < 4:
+            df[df.shape[1]] = ""
+
+        df = df.iloc[:, :4]
+        df.columns = ["tonga_word", "pos", "sqf_token", "comment"]
+
+        # Auto SQF assignment
+        df["sqf_token"] = df.apply(
+            lambda row:
+                row["sqf_token"]
+                if str(row["sqf_token"]).strip()
+                else pos_to_sqf(row["pos"]),
+            axis=1
+        )
+
+        st.dataframe(df, use_container_width=True)
+
+        if st.button("Save Uploaded Data"):
+            for _, row in df.iterrows():
+                insert_or_update({
+                    "tonga_word": str(row["tonga_word"]).strip(),
+                    "pos": str(row["pos"]).strip(),
+                    "sqf_token": str(row["sqf_token"]).strip(),
+                    "comment": str(row["comment"]).strip()
+                })
+            st.success("Excel ingested successfully.")
+
+    st.divider()
+    st.subheader("Current Lexicon")
+    st.dataframe(fetch_all(), use_container_width=True)
+
+# =============================
+# TAB 2 — SEARCH
+# =============================
+with tab2:
+    st.subheader("Search Tonga Word")
+
+    query = st.text_input("Search")
+
+    if query:
+        results = fetch_word(query)
+        st.dataframe(
+            results,
+            use_container_width=True
+        )
+
+# =============================
+# TAB 3 — EXPORT
+# =============================
+with tab3:
+    st.subheader("Export")
+
+    if st.button("Export Pickle"):
+        export_pickle()
+        st.success(f"Exported → {PICKLE_PATH}")
+
+    st.caption(
+        "Pickle contains list[dict]: "
+        "tonga_word, pos, sqf_token, comment"
+    )
