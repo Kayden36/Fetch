@@ -2,80 +2,160 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 import pickle
-import io
+from pathlib import Path
 
-st.title("Tonga Vocabulary Ingest & Persist")
+# -----------------------------
+# Config
+# -----------------------------
+DB_PATH = "tonga_sqf.db"
+PICKLE_PATH = "tonga_sqf.pkl"
 
-# --- SQLite Setup ---
-conn = sqlite3.connect("tonga_vocab.db")
-c = conn.cursor()
-c.execute("""
-CREATE TABLE IF NOT EXISTS vocab (
-    tonga_word TEXT PRIMARY KEY,
-    english_translation TEXT,
-    POS TEXT,
-    class INTEGER
-)
-""")
-conn.commit()
+st.set_page_config(page_title="Tonga SQF Tagger", layout="wide")
 
-# --- Manual Input ---
-st.header("Manual Input")
-manual_input = st.text_area(
-    "Enter Tonga vocab manually (one per line, tab-separated: Tonga Word<TAB>English Translation<TAB>POS<TAB>Class)",
-    height=150
-)
-if st.button("Add Manual Input"):
-    if manual_input.strip():
-        lines = manual_input.strip().split("\n")
-        for line in lines:
-            parts = line.split("\t")
-            if len(parts) == 4:
-                tonga_word, translation, pos, class_num = parts
-                try:
-                    c.execute("INSERT OR REPLACE INTO vocab VALUES (?, ?, ?, ?)",
-                              (tonga_word.strip(), translation.strip(), pos.strip(), int(class_num.strip())))
-                except Exception as e:
-                    st.error(f"Error inserting {tonga_word}: {e}")
-        conn.commit()
-        st.success("Manual input added to database.")
+# -----------------------------
+# Database
+# -----------------------------
+def get_conn():
+    return sqlite3.connect(DB_PATH, check_same_thread=False)
 
-# --- Excel Upload ---
-st.header("Upload Excel File")
-uploaded_file = st.file_uploader("Upload your Tonga vocab Excel file", type=["xlsx", "xls"])
-if uploaded_file is not None:
-    df = pd.read_excel(uploaded_file)
-    st.write("Preview of Excel data:")
-    st.dataframe(df.head())
+def init_db():
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS vocab (
+            tonga_word TEXT PRIMARY KEY,
+            pos TEXT,
+            sqf_token TEXT,
+            comment TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
 
-    if st.button("Add Excel Data to DB"):
-        for idx, row in df.iterrows():
-            try:
-                c.execute("INSERT OR REPLACE INTO vocab VALUES (?, ?, ?, ?)",
-                          (row['Tonga Word'], row['English Translation'], row['POS'], int(row['Class'])))
-            except Exception as e:
-                st.error(f"Error inserting row {idx}: {e}")
-        conn.commit()
-        st.success("Excel data added to database.")
+init_db()
 
-# --- View Database ---
-st.header("Current Database Entries")
-db_df = pd.read_sql("SELECT * FROM vocab", conn)
-st.dataframe(db_df)
+# -----------------------------
+# Helpers
+# -----------------------------
+def insert_or_update(row):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT OR REPLACE INTO vocab
+        (tonga_word, pos, sqf_token, comment)
+        VALUES (?, ?, ?, ?)
+    """, (row["tonga_word"], row["pos"], row["sqf_token"], row["comment"]))
+    conn.commit()
+    conn.close()
 
-# --- Export Pickle ---
-st.header("Export Database as Pickle")
-if st.button("Generate Pickle"):
-    vocab_dict = db_df.set_index('tonga_word').T.to_dict()
-    pickle_file_name = "tonga_vocab.pickle"
-    with open(pickle_file_name, "wb") as f:
-        pickle.dump(vocab_dict, f)
-    st.success(f"Pickle file saved as {pickle_file_name}")
-    st.download_button(
-        "Download Pickle",
-        data=open(pickle_file_name, "rb").read(),
-        file_name=pickle_file_name
+def fetch_all():
+    conn = get_conn()
+    df = pd.read_sql("SELECT * FROM vocab ORDER BY tonga_word", conn)
+    conn.close()
+    return df
+
+def fetch_word(word):
+    conn = get_conn()
+    df = pd.read_sql(
+        "SELECT * FROM vocab WHERE tonga_word LIKE ?",
+        conn,
+        params=(f"%{word}%",)
+    )
+    conn.close()
+    return df
+
+def export_pickle():
+    df = fetch_all()
+    records = df.to_dict(orient="records")
+    with open(PICKLE_PATH, "wb") as f:
+        pickle.dump(records, f)
+
+# -----------------------------
+# UI
+# -----------------------------
+st.title("Tonga → SQF POS Tagger")
+
+tab1, tab2 = st.tabs(["📥 Ingest / Edit", "🔍 Search"])
+
+# =============================
+# TAB 1 — INGEST
+# =============================
+with tab1:
+    st.subheader("Manual Entry")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        tonga_word = st.text_input("Tonga Word")
+
+    with col2:
+        pos = st.text_input("POS")
+
+    with col3:
+        sqf_token = st.text_input("SQF Token")
+
+    with col4:
+        comment = st.text_input("Comment")
+
+    if st.button("Save Entry"):
+        if tonga_word and pos:
+            insert_or_update({
+                "tonga_word": tonga_word.strip(),
+                "pos": pos.strip(),
+                "sqf_token": sqf_token.strip(),
+                "comment": comment.strip()
+            })
+            st.success("Saved.")
+        else:
+            st.error("Tonga word and POS are required.")
+
+    st.divider()
+
+    st.subheader("Upload Excel")
+
+    uploaded = st.file_uploader(
+        "Upload Excel (2 columns: Tonga word, POS)",
+        type=["xlsx"]
     )
 
-# --- Close connection on exit ---
-# conn.close()  # Optional: keep it open for session persistence
+    if uploaded:
+        df = pd.read_excel(uploaded, header=None)
+        df.columns = ["tonga_word", "pos"]
+        df["sqf_token"] = ""
+        df["comment"] = ""
+
+        st.dataframe(df, use_container_width=True)
+
+        if st.button("Save Uploaded Data"):
+            for _, row in df.iterrows():
+                insert_or_update({
+                    "tonga_word": str(row["tonga_word"]).strip(),
+                    "pos": str(row["pos"]).strip(),
+                    "sqf_token": "",
+                    "comment": ""
+                })
+            st.success("Excel data saved.")
+
+    st.divider()
+
+    st.subheader("Database Contents")
+    st.dataframe(fetch_all(), use_container_width=True)
+
+    if st.button("Export Pickle"):
+        export_pickle()
+        st.success(f"Pickle exported → {PICKLE_PATH}")
+
+# =============================
+# TAB 2 — SEARCH
+# =============================
+with tab2:
+    st.subheader("Search Tonga Word")
+
+    query = st.text_input("Enter Tonga word")
+
+    if query:
+        results = fetch_word(query)
+        st.dataframe(
+            results[["pos", "sqf_token", "comment"]],
+            use_container_width=True
+        )
