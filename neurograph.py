@@ -106,17 +106,23 @@ def insert_or_update(row):
     conn.close()
 
 def fetch_all():
-    conn = get_conn()
-    df = pd.read_sql("SELECT * FROM lexicon ORDER BY tonga_word", conn)
-    conn.close()
-    # Deserialize features
-    df["features"] = df["features"].apply(pickle.loads)
-    return df
+    try:
+        conn = get_conn()
+        df = pd.read_sql("SELECT * FROM lexicon ORDER BY tonga_word", conn)
+        conn.close()
+        df["features"] = df["features"].apply(pickle.loads)
+        return df
+    except Exception:
+        return pd.DataFrame(columns=[
+            "tonga_word","pos","sqf_particle",
+            "particle_class","subparticle",
+            "features","comment"
+        ])
 
 # =============================
 # STREAMLIT UI
 # =============================
-tab1, tab2 = st.tabs(["📥 Upload & Enrich", "🔍 Search / Vector"])
+tab1, tab2, tab3 = st.tabs(["📥 Upload & Enrich", "🔍 Search / Vector", "📦 Export Enriched Pickle"])
 
 # -----------------------------
 # TAB 1 - PICKLE UPLOAD
@@ -167,8 +173,47 @@ with tab2:
     if st.button("Run Vector Search") and vector_input:
         try:
             v = np.array([float(x) for x in vector_input.split(",")])
-            df_all["dot"] = df_all["features"].apply(lambda f: np.dot(f,v))
-            results = df_all.sort_values("dot",ascending=False).head(top_n)
-            st.dataframe(results[["tonga_word","pos","sqf_particle","particle_class","subparticle","dot","comment"]])
+            if v.shape[0] != 7:
+                st.error("Vector must have exactly 7 dimensions")
+            else:
+                df_all["dot"] = df_all["features"].apply(lambda f: np.dot(f,v))
+                results = df_all.sort_values("dot",ascending=False).head(top_n)
+                st.dataframe(results[["tonga_word","pos","sqf_particle","particle_class","subparticle","dot","comment"]])
         except Exception as e:
             st.error(f"Vector parse error: {e}")
+
+# -----------------------------
+# TAB 3 - EXPORT ENRICHED PICKLE
+# -----------------------------
+with tab3:
+    st.subheader("Export Enriched SQF Lexicon as Pickle")
+
+    try:
+        df_all = fetch_all()
+        if df_all.empty:
+            st.warning("No data found in SQLite database.")
+        else:
+            enriched_list = []
+            for _, row in df_all.iterrows():
+                enriched_list.append({
+                    "tonga_word": row["tonga_word"],
+                    "pos": row["pos"],
+                    "sqf_particle": row["sqf_particle"],
+                    "particle_class": row["particle_class"],
+                    "subparticle": row["subparticle"],
+                    "features": row["features"],
+                    "comment": row["comment"]
+                })
+
+            pickle_bytes = pickle.dumps(enriched_list)
+
+            st.success(f"Prepared {len(enriched_list)} enriched entries")
+
+            st.download_button(
+                label="⬇️ Download Enriched Pickle",
+                data=pickle_bytes,
+                file_name="tonga_sqf_enriched.pkl",
+                mime="application/octet-stream"
+            )
+    except Exception as e:
+        st.error(f"Export failed: {e}")
