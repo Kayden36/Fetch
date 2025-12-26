@@ -3,43 +3,81 @@ import pandas as pd
 import sqlite3
 import pickle
 from pathlib import Path
+import numpy as np
 
 # =============================
 # CONFIG
 # =============================
-DB_PATH = "tonga_sqf.db"
-PICKLE_PATH = "tonga_sqf.pkl"
-
-st.set_page_config(
-    page_title="Tonga → SQF Tagger",
-    layout="wide"
-)
+DB_PATH = "tonga_sqf_vectors.db"
+st.set_page_config("Tonga SQF Semantic Search", layout="wide")
 
 # =============================
-# POS → SQF MAP
+# POS → Particle Map
 # =============================
-POS_TO_SQF = {
-    "Noun": "Boson",
-    "Verb": "Fermion",
-    "Pronoun": "Boson.Proxy",
-    "Adjective": "Scalar.Boson",
-    "Adverb": "Scalar.Fermion",
-    "Preposition": "Gauge",
-    "Conjunction": "Operator",
-    "Interjection": "Scalar.Impulse",
-    "Number": "Scalar.Quantizer",
-    "Demonstrative": "Anchor.Gauge",
-    "Question": "Operator.Probe"
+POS_TO_PARTICLE = {
+    "Noun":"Boson",
+    "Proper Noun":"Boson",
+    "Pronoun":"Boson",
+    "Demonstrative":"Boson",
+    "Verb":"Fermion",
+    "Adjective":"Scalar",
+    "Adverb":"Scalar",
+    "Preposition":"Gauge",
+    "Conjunction":"Operator",
+    "Interjection":"Scalar",
+    "Number":"Scalar",
+    "Demonstrative Pronoun":"Anchor",
+    "Question":"Operator"
 }
 
-def pos_to_sqf(pos):
-    if not pos:
-        return ""
-    pos_clean = str(pos).strip().title()
-    return POS_TO_SQF.get(pos_clean, "Unknown")
+# =============================
+# SQF Classes / KV semantic features
+# =============================
+SubclassSemanticMatrix = {
+    "BoC1":{"features":{"life":1,"agency":1,"volition":1,"physicality":1}},
+    "BoC2":{"features":{"life":1,"agency":1,"plurality":1,"physicality":1}},
+    "FeC1":{"features":{"agency_required":1,"volition":1,"causation":1}},
+    "FeC2":{"features":{"modifies":1,"temporal":1}},
+    "ScC1":{"features":{"modifies":1,"attribute":1}},
+    "GaC1":{"features":{"relational":1,"spatial":1}},
+    "OpC1":{"features":{"logical":1}},
+    "AnC1":{"features":{"pointing":1}},
+    "Unknown":{"features":{}}
+}
+
+SQF_PARTICLE_CLASSES = {
+    "Boson":["BoC1","BoC2"],
+    "Fermion":["FeC1","FeC2"],
+    "Scalar":["ScC1","ScC2"],
+    "Gauge":["GaC1"],
+    "Operator":["OpC1","OpC2"],
+    "Anchor":["AnC1"],
+    "Unknown":["Unknown"]
+}
+
+PARTICLE_IDX = {k:i for i,k in enumerate(SQF_PARTICLE_CLASSES.keys())}
 
 # =============================
-# DATABASE
+# VECTOR GENERATOR
+# =============================
+def sqf_vector(particle_type, particle_class):
+    vector = np.zeros(10)
+    vector[0] = PARTICLE_IDX.get(particle_type, PARTICLE_IDX["Unknown"])
+    class_list = SQF_PARTICLE_CLASSES.get(particle_type, ["Unknown"])
+    vector[1] = class_list.index(particle_class) if particle_class in class_list else 0
+    features = SubclassSemanticMatrix.get(particle_class,{}).get("features",{})
+    vector[2] = features.get("life",0)
+    vector[3] = features.get("agency",0) + features.get("agency_required",0)
+    vector[4] = features.get("physicality",0)
+    vector[5] = features.get("plurality",0)
+    vector[6] = features.get("instrumental",0) + features.get("modifies",0) + features.get("causation",0) + features.get("volition",0)
+    vector[7] = features.get("spatial",0)
+    vector[8] = features.get("abstract",0) + features.get("logical",0) + features.get("pointing",0) + features.get("temporal",0)
+    vector[9] = 0
+    return vector.tolist()
+
+# =============================
+# DATABASE HELPERS
 # =============================
 def get_conn():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -49,208 +87,100 @@ def init_db():
     cur = conn.cursor()
     cur.execute("""
         CREATE TABLE IF NOT EXISTS vocab (
-            tonga_word TEXT PRIMARY KEY,
+            tonga_word TEXT,
+            comment TEXT,
             pos TEXT,
-            sqf_token TEXT,
-            comment TEXT
+            sqf_particle TEXT,
+            particle_class TEXT,
+            vector TEXT,
+            PRIMARY KEY(tonga_word)
         )
     """)
     conn.commit()
     conn.close()
 
-init_db()
-
-# =============================
-# DB HELPERS
-# =============================
-def insert_or_update(row):
+def insert_row(row):
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("""
         INSERT OR REPLACE INTO vocab
-        (tonga_word, pos, sqf_token, comment)
-        VALUES (?, ?, ?, ?)
-    """, (
-        row["tonga_word"],
-        row["pos"],
-        row["sqf_token"],
-        row["comment"]
-    ))
+        (tonga_word, comment, pos, sqf_particle, particle_class, vector)
+        VALUES (?,?,?,?,?,?)
+    """,(row["tonga_word"], row["comment"], row["pos"], row["sqf_particle"], row["particle_class"], str(row["vector"])))
     conn.commit()
     conn.close()
 
 def fetch_all():
     conn = get_conn()
-    df = pd.read_sql(
-        "SELECT * FROM vocab ORDER BY tonga_word",
-        conn
-    )
+    df = pd.read_sql("SELECT * FROM vocab ORDER BY tonga_word",conn)
     conn.close()
     return df
 
-def fetch_word(query):
-    conn = get_conn()
-    df = pd.read_sql(
-        "SELECT * FROM vocab WHERE tonga_word LIKE ?",
-        conn,
-        params=(f"%{query}%",)
-    )
-    conn.close()
-    return df
-
-def export_pickle():
-    df = fetch_all()
-    records = df.to_dict(orient="records")
-    with open(PICKLE_PATH, "wb") as f:
-        pickle.dump(records, f)
+init_db()
 
 # =============================
 # UI
 # =============================
-st.title("🧠 Tonga → SQF POS Tagger")
+st.title("🌐 Tonga SQF Semantic Search")
 
-tab1, tab2, tab3 = st.tabs([
-    "📥 Ingest / Edit",
-    "🔍 Search",
-    "📦 Export"
-])
+tab1, tab2, tab3 = st.tabs(["📦 Enrich & Save", "🔍 Search", "📤 Export Pickle"])
 
-# =============================
-# TAB 1 — INGEST / EDIT
-# =============================
+# -----------------------------
+# TAB 1 — Enrich & Save
+# -----------------------------
 with tab1:
-    st.subheader("Manual Entry")
-
-    c1, c2, c3, c4 = st.columns(4)
-
-    with c1:
-        tonga_word = st.text_input("Tonga Word")
-
-    with c2:
-        pos = st.text_input("POS (e.g. Noun, Verb)")
-
-    with c3:
-        sqf_token = st.text_input("SQF Token (optional)")
-
-    with c4:
-        comment = st.text_input("Comment / English gloss")
-
-    if st.button("Save Entry"):
-        if tonga_word and pos:
-            final_sqf = sqf_token.strip() or pos_to_sqf(pos)
-            insert_or_update({
-                "tonga_word": tonga_word.strip(),
-                "pos": pos.strip(),
-                "sqf_token": final_sqf,
-                "comment": comment.strip()
-            })
-            st.success("Saved.")
-        else:
-            st.error("Tonga word and POS are required.")
-
-    st.divider()
-
-    # =============================
-    # EXCEL UPLOAD
-    # =============================
-    st.subheader("Upload Excel (3-4 columns, no headers)")
-    st.caption("Columns: Tonga | POS | Comment (optional SQF) | Comment")
-
-    uploaded = st.file_uploader(
-        "Upload .xlsx file",
-        type=["xlsx"]
-    )
-
+    st.subheader("Upload Pickle")
+    uploaded = st.file_uploader("Pickle file (.pkl) containing Tonga lexicon", type=["pkl"])
     if uploaded:
-        df = pd.read_excel(uploaded, header=None)
+        data = pickle.load(uploaded)
+        st.write(f"Loaded {len(data)} entries.")
+        enriched = []
+        for row in data:
+            particle_type = row.get("sqf_particle","Unknown")
+            particle_class = row.get("particle_class","Unknown")
+            row["vector"] = sqf_vector(particle_type, particle_class)
+            enriched.append(row)
+            insert_row(row)
+        st.success(f"Enriched and saved {len(enriched)} entries to SQLite.")
+        st.dataframe(pd.DataFrame(enriched).head(20))
 
-        # Handle 3 or 4 columns
-        if df.shape[1] == 3:
-            df.columns = ["tonga_word", "pos", "comment"]
-            df["sqf_token"] = ""
-        elif df.shape[1] >= 4:
-            df = df.iloc[:, :4]
-            df.columns = ["tonga_word", "pos", "sqf_token", "comment"]
-        else:
-            st.error("Excel must have at least 3 columns")
-            st.stop()
-
-        # Auto SQF assignment
-        df["sqf_token"] = df.apply(
-            lambda row:
-                row["sqf_token"]
-                if str(row["sqf_token"]).strip()
-                else pos_to_sqf(row["pos"]),
-            axis=1
-        )
-
-        st.dataframe(df, use_container_width=True)
-
-        if st.button("Save Uploaded Data"):
-            for _, row in df.iterrows():
-                insert_or_update({
-                    "tonga_word": str(row["tonga_word"]).strip(),
-                    "pos": str(row["pos"]).strip(),
-                    "sqf_token": str(row["sqf_token"]).strip(),
-                    "comment": str(row["comment"]).strip()
-                })
-            st.success("Excel ingested successfully.")
-
-    st.divider()
-    st.subheader("Current Lexicon")
-    st.dataframe(fetch_all(), use_container_width=True)
-
-# =============================
-# TAB 2 — SEARCH
-# =============================
+# -----------------------------
+# TAB 2 — Search
+# -----------------------------
 with tab2:
-    st.subheader("Search Tonga Word")
-
-    query = st.text_input("Search")
-
-    if query:
-        results = fetch_word(query)
-        st.dataframe(
-            results,
-            use_container_width=True
-        )
-
-# =============================
-# TAB 3 — EXPORT
-# =============================
-with tab3:
-    st.subheader("Export")
-
-    # Export Pickle
-    if st.button("Export Pickle"):
-        export_pickle()
-        st.success(f"Exported → {PICKLE_PATH}")
-        with open(PICKLE_PATH, "rb") as f:
-            st.download_button(
-                label="Download Pickle",
-                data=f,
-                file_name=PICKLE_PATH,
-                mime="application/octet-stream"
-            )
-
-    # Export JSON
-    if st.button("Export JSON"):
+    st.subheader("Search Tonga or English comment")
+    query = st.text_input("Search by word or comment substring")
+    if st.button("Search Text"):
         df = fetch_all()
-        json_path = PICKLE_PATH.replace(".pkl", ".json")
-        records = df.to_dict(orient="records")
-        with open(json_path, "w", encoding="utf-8") as f:
-            import json
-            json.dump(records, f, ensure_ascii=False, indent=2)
-        st.success(f"Exported → {json_path}")
-        with open(json_path, "rb") as f:
-            st.download_button(
-                label="Download JSON",
-                data=f,
-                file_name=json_path,
-                mime="application/json"
-            )
+        mask = df.apply(lambda r: query.lower() in str(r["tonga_word"]).lower() or query.lower() in str(r["comment"]).lower(), axis=1)
+        st.dataframe(df[mask])
 
-    st.caption(
-        "Pickle contains list[dict]: "
-        "tonga_word, pos, sqf_token, comment"
-    )
+    st.subheader("Vector Search")
+    vector_input = st.text_area("Enter 10-dim vector (comma-separated)")
+    if st.button("Search Vector"):
+        try:
+            qvec = np.array([float(x) for x in vector_input.strip().split(",")])
+            df = fetch_all()
+            vectors = df["vector"].apply(lambda s: np.array(eval(s)))
+            dot_scores = vectors.apply(lambda v: np.dot(qvec,v))
+            df["score"] = dot_scores
+            st.dataframe(df.sort_values("score",ascending=False).head(20))
+        except:
+            st.error("Invalid vector input. Enter 10 numbers separated by commas.")
+
+# -----------------------------
+# TAB 3 — Export Pickle
+# -----------------------------
+with tab3:
+    st.subheader("Generate & Download Enriched Pickle")
+    if st.button("Generate Pickle"):
+        df = fetch_all()
+        enriched_list = df.to_dict(orient="records")
+        pickle_bytes = pickle.dumps(enriched_list)
+        st.download_button(
+            "Download Enriched Pickle",
+            data=pickle_bytes,
+            file_name="tonga_sqf_enriched.pkl",
+            mime="application/octet-stream"
+        )
+        st.success("Pickle ready for download.")
