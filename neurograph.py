@@ -12,6 +12,7 @@ import re
 import csv
 import zipfile
 from openpyxl import load_workbook
+DB_FILE = "inference.db"
 
 # ---------------------------
 # Database setup
