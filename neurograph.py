@@ -13,7 +13,12 @@ import csv
 import zipfile
 from openpyxl import load_workbook
 DB_FILE = "inference.db"
+TAB1_KEY = st.secrets["TAB1_KEY"]
+TAB1_URL = st.secrets["TAB1_URL"]
 
+headers = {
+    "Ocp-Apim-Subscription-Key": TAB1_KEY
+}
 # ---------------------------
 # Database setup
 # ---------------------------
