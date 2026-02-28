@@ -4,7 +4,7 @@ numpy
 matplotlib
 openpyxl
 requests
-streamlit as st
+streamlit 
 sqlite3
 json
 time
@@ -12,4 +12,4 @@ datetime
 io
 re
 csv
-openpyxl import load_workbook
+openpyxl
