@@ -3,13 +3,4 @@ numpy
 matplotlib
 openpyxl
 requests
-streamlit 
-sqlite3
-json
-time
-datetime
-io
-re
-csv
-openpyxl
-
+streamlit
