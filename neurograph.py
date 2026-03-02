@@ -200,27 +200,6 @@ if st.session_state.logged_in:
             unsafe_allow_html=True
         )
 
-    # Close grid container
-    st.markdown('</div>', unsafe_allow_html=True)
-
-st.markdown('</div>', unsafe_allow_html=True)
-    st.markdown('<div class="samaritan-title">PUBLIC OSINT AND SOCIAL MEDIA ANALYSIS AI PLATFORM 🔎</div>', unsafe_allow_html=True)
-    st.markdown('<div class="samaritan2-title">AI for National Security Insights powered by Cyclops Cognitive Services v3.6.2</div>', unsafe_allow_html=True)
-    # Iframe grid
-    st.markdown("""
-    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 1rem; margin-bottom: 1rem;">
-      <iframe src="https://mastmediazm.com/category/politics/" width="100%" height="200"></iframe>
-      <iframe src="https://www.lusakatimes.com" width="100%" height="200"></iframe>
-      <iframe src="https://znbc.co.zm" width="100%" height="200"></iframe>
-      <iframe src="https://makanday.org" width="100%" height="200"></iframe>
-      <iframe src="https://www.sabcnews.com" width="100%" height="200"></iframe>
-      <iframe src="https://www.zambianobserver.com" width="100%" height="200"></iframe>
-      <iframe src="https://www.mwebantu.com/" width="100%" height="200"></iframe>
-      <iframe src="https://www.daily-mail.co.zm" width="100%" height="200"></iframe>
-    
-    </div>
-    """, unsafe_allow_html=True)
-
     tabs = st.tabs(["VISUALS", "EXTRACT", "REGISTRY", "ASSISTANT", "TOOLS", "VETTING", "PUBLIC OPINION", "OSINT BRIEF"])
 
     # ---------------------------
