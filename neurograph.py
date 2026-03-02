@@ -170,6 +170,30 @@ else:
 # Main App (Protected Area)
 # ---------------------------
 if st.session_state.logged_in:
+FEEDS = {
+    "Mast Media (Politics)": "https://mastmediazm.com/category/politics/",
+    "Lusaka Times": "https://www.lusakatimes.com",
+    "ZNBC": "https://znbc.co.zm",
+    "Makanday": "https://makanday.org",
+    "SABC News": "https://www.sabcnews.com",
+    "Zambian Observer": "https://www.zambianobserver.com",
+    "Mwebantu": "https://www.mwebantu.com/",
+    "Daily Mail": "https://www.daily-mail.co.zm"
+}
+selected_feeds = st.multiselect(
+    "Select Feeds to Monitor",
+    list(FEEDS.keys()),
+    default=list(FEEDS.keys())[:4]  # default first 4
+)
+st.markdown('<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 1rem; margin-bottom: 1rem;">', unsafe_allow_html=True)
+
+for feed in selected_feeds:
+    st.markdown(
+        f'<iframe src="{FEEDS[feed]}" width="100%" height="200"></iframe>',
+        unsafe_allow_html=True
+    )
+
+st.markdown('</div>', unsafe_allow_html=True)
     st.markdown('<div class="samaritan-title">PUBLIC OSINT AND SOCIAL MEDIA ANALYSIS AI PLATFORM 🔎</div>', unsafe_allow_html=True)
     st.markdown('<div class="samaritan2-title">AI for National Security Insights powered by Cyclops Cognitive Services v3.6.2</div>', unsafe_allow_html=True)
     # Iframe grid
