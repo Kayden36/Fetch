@@ -166,8 +166,8 @@ else:
         st.session_state.username = ""
         st.sidebar.info("You have logged out.")
 
-Main App (Protected Area)
- ---------------------------
+#Main App (Protected Area)
+ #---------------------------
 if st.session_state.logged_in:
     FEEDS = {
         "Mast Media (Politics)": "https://mastmediazm.com/category/politics/",
