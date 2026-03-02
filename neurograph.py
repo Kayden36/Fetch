@@ -166,7 +166,7 @@ else:
         st.session_state.username = ""
         st.sidebar.info("You have logged out.")
 
-# Main App (Protected Area)
+Main App (Protected Area)
  ---------------------------
 if st.session_state.logged_in:
     FEEDS = {
@@ -199,8 +199,7 @@ if st.session_state.logged_in:
             f'<iframe src="{FEEDS[feed]}" width="100%" height="200"></iframe>',
             unsafe_allow_html=True
         )
-
-    tabs = st.tabs(["VISUALS", "EXTRACT", "REGISTRY", "ASSISTANT", "TOOLS", "VETTING", "PUBLIC OPINION", "OSINT BRIEF"])
+  tabs = st.tabs(["VISUALS", "EXTRACT", "REGISTRY", "ASSISTANT", "TOOLS", "VETTING", "PUBLIC OPINION", "OSINT BRIEF"])
 
     # ---------------------------
     # TAB 1: Sentiment Scan
