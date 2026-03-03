@@ -421,7 +421,7 @@ if st.session_state.logged_in:
     # ---------------------------
 if st.session_state.get("logged_in"):
     with tabs[3]:  # Assuming this is Tab 3 (index 3)
-    st.header("🧠 Cyclops Copilot")
+        st.header("🧠 Cyclops Copilot")
 
     cyclops_context = st.text_area(
         "Ask Cyclops, verify reports, detect misinformation or propaganda",
