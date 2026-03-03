@@ -72,7 +72,7 @@ def authenticate(username, password):
     row = c.execute("SELECT * FROM operators WHERE username=? AND password=?", (username, password)).fetchone()
     return row is not None
 
-#def save_scan(operator, doc_id, sentiment, summary, context):
+def save_scan(operator, doc_id, sentiment, summary, context):
     c.execute("""
         INSERT INTO scans (operator, input_text, sentiment, summary, context)
         VALUES (?,?,?,?,?)
@@ -420,8 +420,8 @@ if st.session_state.logged_in:
     # TAB 4: Cyclops Copilot (Clean / No Backend / No Downloads)
     # ---------------------------
 #if st.session_state.get("logged_in"):
-    with tabs[3]:  # Assuming this is Tab 3 (index 3)
-        #st.header("🧠")
+        with tabs[3]:  # Assuming this is Tab 3 (index 3)
+            #st.header("🧠")
 
         cyclops_context = st.text_area(
         "Ask Cyclops, verify reports, detect misinformation or propaganda",
