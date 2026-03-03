@@ -72,7 +72,7 @@ def authenticate(username, password):
     row = c.execute("SELECT * FROM operators WHERE username=? AND password=?", (username, password)).fetchone()
     return row is not None
 
-def save_scan(operator, doc_id, sentiment, summary, context):
+#def save_scan(operator, doc_id, sentiment, summary, context):
     c.execute("""
         INSERT INTO scans (operator, input_text, sentiment, summary, context)
         VALUES (?,?,?,?,?)
