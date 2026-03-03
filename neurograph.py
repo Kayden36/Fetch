@@ -421,7 +421,7 @@ if st.session_state.logged_in:
     # ---------------------------
 
     with tabs[3]:
-    st.header("🧠 Cyclops Copilot")
+        st.header("🧠 Cyclops Copilot")
 
     if not st.session_state.get("logged_in"):
         st.info("🔒 Please log in to access Cyclops Copilot features.")
