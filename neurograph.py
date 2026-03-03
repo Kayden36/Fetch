@@ -167,7 +167,7 @@ else:
         st.sidebar.info("You have logged out.")
 
 #Main App (Protected Area)
- #---------------------------
+ #____
 if st.session_state.logged_in:
     FEEDS = {
         "Mast Media (Politics)": "https://mastmediazm.com/category/politics/",
@@ -180,25 +180,22 @@ if st.session_state.logged_in:
         "Daily Mail": "https://www.daily-mail.co.zm"
     }
 
-    # Feed selection
     selected_feeds = st.multiselect(
         "Select Feeds to Monitor",
         options=list(FEEDS.keys()),
-        default=list(FEEDS.keys())[:4]  # default first 4 feeds
+        default=list(FEEDS.keys())[:4]
     )
 
-    # Grid container
-    st.markdown(
-        '<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 1rem; margin-bottom: 1rem;">',
-        unsafe_allow_html=True
-    )
-
-    # Render selected feeds
+    # Build HTML string for all iframes inside a single grid container
+    grid_html = '<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 1rem; margin-bottom: 1rem;">'
     for feed in selected_feeds:
-        st.markdown(
-            f'<iframe src="{FEEDS[feed]}" width="100%" height="200"></iframe>',
-            unsafe_allow_html=True
-        )
+        grid_html += f'<iframe src="{FEEDS[feed]}" width="100%" height="200"></iframe>'
+    grid_html += '</div>'
+
+    st.markdown(grid_html, unsafe_allow_html=True)
+#-------------
+#Tabs
+#----------------
 
     tabs = st.tabs(["VISUALS", "EXTRACT", "REGISTRY", "ASSISTANT", "TOOLS", "VETTING", "PUBLIC OPINION", "OSINT BRIEF"])
 
