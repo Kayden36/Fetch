@@ -202,7 +202,7 @@ if st.session_state.logged_in:
     # ---------------------------
     # TAB 1: Sentiment Scan
     # ---------------------------
-    with tabs[0]:
+    with tabs[7]:
         st.header("🔎 Sentiment Scan")
         context_sentiment = st.text_area("Optional Context / Subject",
                                          placeholder="e.g., political topic, public mood…",
@@ -791,7 +791,7 @@ if st.session_state.get("logged_in"):
     # TAB 7: SERP-based Auto-Sentiment Scan
     # ---------------------------
     if st.session_state.get("logged_in"):
-        with tabs[6]:  # Assets tab
+        with tabs[0]:  # Assets tab
             st.header("Public Opinion")
 
             with st.expander("🧠 Public Opinion Analysis", expanded=True):
