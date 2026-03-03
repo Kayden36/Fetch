@@ -423,7 +423,7 @@ if st.session_state.get("logged_in"):
     with tabs[3]:  # Assuming this is Tab 3 (index 3)
         #st.header("🧠")
 
-    cyclops_context = st.text_area(
+        cyclops_context = st.text_area(
         "Ask Cyclops, verify reports, detect misinformation or propaganda",
         placeholder="Type or paste the data you want to verify here or upload cyclops.txt files…",
         key="cyclops_context"
