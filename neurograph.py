@@ -422,7 +422,7 @@ if st.session_state.logged_in:
 if st.session_state.get("logged_in"):
     with tabs[3]:
         st.header("🧠 Cyclops Copilot ")
-            cyclops_context = st.text_area(
+        cyclops_context = st.text_area(
                 "Here you can ask, verify accuracy of media reports, detect misinformation and propaganda",
                 placeholder="type or paste the data you want to verify here or upload any cyclops.txt you want to verify further..",
                 key="cyclops_context"
