@@ -420,7 +420,7 @@ if st.session_state.logged_in:
     # TAB 4: Cyclops Copilot (Clean / No Backend / No Downloads)
     # ---------------------------
     if st.session_state.get("logged_in"):
-        with tabs[3]:
+    with tabs[3]:
 
             st.header("🧠 Cyclops Copilot ")
 
