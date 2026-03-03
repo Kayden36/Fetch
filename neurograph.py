@@ -420,98 +420,96 @@ if st.session_state.logged_in:
     # TAB 4: Cyclops Copilot (Clean / No Backend / No Downloads)
     # ---------------------------
 if st.session_state.get("logged_in"):
-    with tabs[3]:
-        st.header("🧠 Cyclops Copilot ")
-        cyclops_context = st.text_area(
-                "Here you can ask, verify accuracy of media reports, detect misinformation and propaganda",
-                placeholder="type or paste the data you want to verify here or upload any cyclops.txt you want to verify further..",
-                key="cyclops_context"
-            )
+    with tabs[3]:  # Assuming this is Tab 3 (index 3)
+    st.header("🧠 Cyclops Copilot")
 
-        uploaded_cyclops_files = st.file_uploader(
-                "Upload TXT files (optional)",
-                type=["txt"],
-                accept_multiple_files=True,
-                key="cyclops_txt_upload"
-            )
+    cyclops_context = st.text_area(
+        "Ask Cyclops, verify reports, detect misinformation or propaganda",
+        placeholder="Type or paste the data you want to verify here or upload cyclops.txt files…",
+        key="cyclops_context"
+    )
 
-        if st.button("Run Query", key="run_cyclops"):
+    uploaded_cyclops_files = st.file_uploader(
+        "Upload TXT files (optional)",
+        type=["txt"],
+        accept_multiple_files=True,
+        key="cyclops_txt_upload"
+    )
 
-                if not cyclops_context and not uploaded_cyclops_files:
-                    st.warning("Provide context or upload at least one TXT file.")
-                    st.stop()
+    if st.button("Run Query", key="run_cyclops"):
 
-                headers = {
-                    "Content-Type": "application/json",
-                    "api-key": AZURE_API_KEY
-                }
+        if not cyclops_context and not uploaded_cyclops_files:
+            st.warning("Provide context or upload at least one TXT file.")
+            st.stop()
 
-                CHAT_URL = (
-                    "https://cyclops.openai.azure.com/openai/deployments/"
-                    "cyclopsgpt-4.1/chat/completions?api-version=2025-01-01-preview"
-                )
+        headers = {
+            "Content-Type": "application/json",
+            "api-key": AZURE_API_KEY  # Ensure AZURE_API_KEY is defined
+        }
 
-                system_message = (
-                    "YOU ARE AN OSINT PLATFORM COPILOT AI.\n"
-                    "For each manual input.\n"
-                    "MOE DEBATE: Form Hypothesis with Known Proofs, patterns, Corroborations vs Counter hypothesis with missing information.\n"
-                    "CONSENSUS: Settle for a clear consensus.\n"
-                    "THEN: Provide a detailed answer to the user query.\n"
-                    "VALIDATION QUERY: Craft a follow up validation search query with google search operators to surface the missing information."
-                )
+        CHAT_URL = (
+            "https://cyclops.openai.azure.com/openai/deployments/"
+            "cyclopsgpt-4.1/chat/completions?api-version=2025-01-01-preview"
+        )
 
-                inputs_to_process = []
+        system_message = (
+            "YOU ARE AN OSINT PLATFORM COPILOT AI.\n"
+            "MOE DEBATE: Form Hypothesis with Known Proofs, Corroborations vs Counter hypothesis with missing information.\n"
+            "CONSENSUS: Settle for a clear consensus.\n"
+            "Then provide a detailed answer to the user query.\n"
+            "VALIDATION QUERY: Craft a follow-up validation search query using Google search operators."
+        )
 
-                # Add files
-                if uploaded_cyclops_files:
-                    for uploaded in uploaded_cyclops_files:
-                        raw_txt = uploaded.read().decode("utf-8", errors="ignore")
-                        inputs_to_process.append((uploaded.name, raw_txt))
+        inputs_to_process = []
 
-                # Add manual context
-                if cyclops_context:
-                    inputs_to_process.append(("Manual Input", cyclops_context))
+        # Add files
+        if uploaded_cyclops_files:
+            for uploaded in uploaded_cyclops_files:
+                raw_txt = uploaded.read().decode("utf-8", errors="ignore")
+                inputs_to_process.append((uploaded.name, raw_txt))
 
-                # Process all inputs
-                for source_name, content_input in inputs_to_process:
+        # Add manual context
+        if cyclops_context:
+            inputs_to_process.append(("Manual Input", cyclops_context))
 
-                    payload = {
-                        "messages": [
-                            {"role": "system", "content": system_message},
-                            {"role": "user", "content": content_input}
-                        ],
-                        "temperature": 0.7,
-                        "top_p": 0.95,
-                        "max_tokens": 3000
-                    }
+        # Process all inputs
+        for source_name, content_input in inputs_to_process:
 
-                    try:
-                        with st.spinner(f"Processing {source_name} data..."):
+            payload = {
+                "messages": [
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": content_input}
+                ],
+                "temperature": 0.7,
+                "top_p": 0.95,
+                "max_tokens": 3000
+            }
 
-                            resp = requests.post(
-                                CHAT_URL,
-                                headers=headers,
-                                json=payload,
-                                timeout=60
-                            )
-                            resp.raise_for_status()
+            try:
+                with st.spinner(f"Processing {source_name}…"):
+                    resp = requests.post(
+                        CHAT_URL,
+                        headers=headers,
+                        json=payload,
+                        timeout=60
+                    )
+                    resp.raise_for_status()
 
-                            data = resp.json()
-                            output = data["choices"][0]["message"]["content"]
+                    data = resp.json()
+                    output = data["choices"][0]["message"]["content"]
 
-                            st.subheader(f"📄 Cyclops Output — {source_name}")
-                            st.markdown(output)
-                        # Download button
-                            st.download_button(
-                            label=f"⬇ Download Cyclops — {source_name}",
-                            data=output,
-                            file_name=f"{source_name}_cyclops_output.txt",
-                            mime="text/plain"
-                            )
+                    st.subheader(f"📄 Cyclops Output — {source_name}")
+                    st.markdown(output)
 
-                    except Exception as e:
-                        st.error(f"Cyclops error: {e}")
-                        st.stop()
+                    st.download_button(
+                        label=f"⬇ Download Cyclops — {source_name}",
+                        data=output,
+                        file_name=f"{source_name}_cyclops_output.txt",
+                        mime="text/plain"
+                    )
+
+            except Exception as e:
+                st.error(f"Cyclops error for {source_name}: {e}")
 
 
 
