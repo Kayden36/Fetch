@@ -429,14 +429,14 @@ if st.session_state.logged_in:
         key="cyclops_context"
     )
 
-    uploaded_cyclops_files = st.file_uploader(
+        uploaded_cyclops_files = st.file_uploader(
         "Upload TXT files (optional)",
         type=["txt"],
         accept_multiple_files=True,
         key="cyclops_txt_upload"
     )
 
-    if st.button("Run Query", key="run_cyclops"):
+        if st.button("Run Query", key="run_cyclops"):
 
         if not cyclops_context and not uploaded_cyclops_files:
             st.warning("Provide context or upload at least one TXT file.")
@@ -466,7 +466,7 @@ if st.session_state.logged_in:
         if uploaded_cyclops_files:
             for uploaded in uploaded_cyclops_files:
                 raw_txt = uploaded.read().decode("utf-8", errors="ignore")
-                inputs_to_process.append((uploaded.name, raw_txt))
+                 inputs_to_process.append((uploaded.name, raw_txt))
 
         # Add manual context
         if cyclops_context:
