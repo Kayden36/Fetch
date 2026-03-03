@@ -435,7 +435,7 @@ if st.session_state.get("logged_in"):
                 key="cyclops_txt_upload"
             )
 
-            if st.button("Run Query", key="run_cyclops"):
+        if st.button("Run Query", key="run_cyclops"):
 
                 if not cyclops_context and not uploaded_cyclops_files:
                     st.warning("Provide context or upload at least one TXT file.")
