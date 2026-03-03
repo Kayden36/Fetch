@@ -424,22 +424,22 @@ if st.session_state.logged_in:
         st.header("🧠 Cyclops Copilot")
 
         if not st.session_state.get("logged_in"):
-        st.info("🔒 Please log in to access Cyclops Copilot features.")
-        else:
-        cyclops_context = st.text_area(
+            st.info("🔒 Please log in to access Cyclops Copilot features.")
+            else:
+            cyclops_context = st.text_area(
             "Ask questions, verify media reports, detect misinformation",
             placeholder="Type or paste your text here, or upload a .txt file",
             key="cyclops_context"
         )
 
-        uploaded_cyclops_files =   st.file_uploader(
+            uploaded_cyclops_files =   st.file_uploader(
             "Upload TXT files (optional)",
             type=["txt"],
             accept_multiple_files=True,
             key="cyclops_txt_upload"
         )
 
-        if st.button("Run Query", key="run_cyclops"):
+            if st.button("Run Query", key="run_cyclops"):
 
             if not cyclops_context and not uploaded_cyclops_files:
                 st.warning("Provide context or upload at least one TXT file.")
