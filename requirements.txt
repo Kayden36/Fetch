@@ -1,6 +1,8 @@
-streamlit
-pandas
-requests
-Pillow
-matplotlib
-openpyxl
+streamlit>=1.32.0
+folium>=0.16.0
+streamlit-folium>=0.20.0
+requests>=2.31.0
+numpy>=1.26.0
+pandas>=2.2.0
+opencv-python-headless>=4.9.0
+Pillow>=10.2.0
