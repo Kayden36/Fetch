@@ -14,7 +14,7 @@ from datetime import datetime
 import json
 
 st.set_page_config(
-    page_title="Solar Panel Detector",
+    page_title="V-Grid Solar Panel Detector",
     page_icon="☀️",
     layout="wide"
 )
